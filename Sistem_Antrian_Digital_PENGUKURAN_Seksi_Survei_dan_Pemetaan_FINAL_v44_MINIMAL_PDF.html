@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sistem Antrian Digital - FINAL v44</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+<style>
+body{font-family:Arial;margin:0;background:#f4f6f9;}
+.header{background:#1f2d3d;color:white;padding:15px;text-align:center;font-weight:bold;}
+.container{padding:20px;}
+.box{background:white;padding:15px;border-radius:8px;margin-bottom:15px;}
+button{padding:6px 10px;border:none;border-radius:5px;cursor:pointer;margin:2px;}
+.primary{background:#2c7be5;color:white;}
+.danger{background:#e74c3c;color:white;}
+table{width:100%;border-collapse:collapse;background:white;}
+th,td{border:1px solid #ddd;padding:6px;text-align:center;}
+th{background:#2c3e50;color:white;}
+.hidden{display:none;}
+.redbold{color:red;font-weight:bold;}
+.small{font-size:12px;}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+SISTEM ANTRIAN DIGITAL PENGUKURAN<br>
+SEKSI SURVEI DAN PEMETAAN<br>
+KANTOR PERTANAHAN KABUPATEN SERANG
+</div>
+
+<div class="container">
+
+<!-- LOGIN -->
+<div id="loginBox" class="box">
+<select id="role">
+<option value="admin">Admin</option>
+<option value="operator">Operator</option>
+</select>
+<input type="password" id="password" placeholder="Password">
+<button type="button" class="primary" onclick="login()">Login</button>
+</div>
+
+<!-- APP -->
+<div id="appPanel" class="hidden">
+
+<div class="box">
+<input type="date" id="tanggal">
+<input type="text" id="berkas" placeholder="Nomor Berkas">
+<select id="petugas" class="small"></select>
+<button class="primary" onclick="tambah()">Tambah</button>
+<button class="danger" onclick="logout()">Logout</button>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>No</th>
+<th>No Berkas</th>
+<th>Petugas</th>
+<th>Tanggal</th>
+<th>Jatuh Tempo</th>
+<th>PDF</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+
+</div>
+</div>
+
+<script>
+function login(){
+let role=document.getElementById("role").value;
+let pass=document.getElementById("password").value.trim();
+
+if(role==="admin" && pass!=="admin123"){ alert("Password Admin salah"); return; }
+if(role==="operator" && pass!=="operator123"){ alert("Password Operator salah"); return; }
+
+document.getElementById("loginBox").classList.add("hidden");
+document.getElementById("appPanel").classList.remove("hidden");
+}
+
+function logout(){
+document.getElementById("appPanel").classList.add("hidden");
+document.getElementById("loginBox").classList.remove("hidden");
+document.getElementById("password").value="";
+}
+
+let data=JSON.parse(localStorage.getItem("v44data"))||[];
+let counter=parseInt(localStorage.getItem("v44counter"))||1;
+
+const daftarPetugas=[
+"Ageng Santoso","Aldy Nabil Abiyi","Alfin Astian","Andi Taofik","Ariq Fauzan",
+"Arya Pandu Istiyanto","BISMA SENO AJIE","Candra Mahardika Anjasmara",
+"Elfanro Yudanatama Siagian","Firman Ramadani Saputra","Hendra Gunawan",
+"Ian Eka Suryaman","Jajang Nurul Hikmat","Januar Ibnu Syafi","Lukman Maulana",
+"Muhamad Rizky Aditya Wiguna","Muhammad Zaky Satria Prima","Rahmat Rio Setiyawan",
+"RIFCKY MUHAMMAD HELMIZAR","Usep Salim Hidayattulloh","Yoga Prasetiya Abu Azis",
+"Yusuf Ichsan Fernanda"
+];
+
+window.onload=function(){
+let sel=document.getElementById("petugas");
+daftarPetugas.forEach(p=>{
+let opt=document.createElement("option");
+opt.text=p;
+opt.className="small";
+sel.add(opt);
+});
+render();
+};
+
+function simpan(){
+localStorage.setItem("v44data",JSON.stringify(data));
+localStorage.setItem("v44counter",counter);
+}
+
+function formatIndo(t){
+let d=new Date(t);
+return ("0"+d.getDate()).slice(-2)+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+d.getFullYear();
+}
+
+function cekKuota(p,t){
+let bulan=new Date(t).getMonth();
+let tahun=new Date(t).getFullYear();
+return data.filter(d=>{
+let dt=new Date(d.tanggal);
+return d.petugas===p && dt.getMonth()===bulan && dt.getFullYear()===tahun;
+}).length;
+}
+
+function tambah(){
+let t=document.getElementById("tanggal").value||new Date().toISOString().slice(0,10);
+let b=document.getElementById("berkas").value;
+let p=document.getElementById("petugas").value;
+
+if(!b){alert("Isi nomor berkas");return;}
+if(cekKuota(p,t)>=25){alert("Kuota 25 berkas bulan ini untuk "+p+" sudah penuh!");return;}
+
+let d=new Date(t); d.setDate(d.getDate()+12);
+let tempo=d.toISOString().slice(0,10);
+let no=("00"+counter).slice(-3);
+
+data.push({no:no,berkas:b,petugas:p,tanggal:t,tempo:tempo});
+counter++; simpan(); render();
+}
+
+function render(){
+let tb=document.getElementById("tbody");
+tb.innerHTML="";
+data.forEach((x,i)=>{
+tb.innerHTML+=`
+<tr>
+<td>${x.no}</td>
+<td>${x.berkas}</td>
+<td class="small">${x.petugas}</td>
+<td>${formatIndo(x.tanggal)}</td>
+<td class="redbold">${formatIndo(x.tempo)}</td>
+<td><button class="primary" onclick="exportPDF(${i})">PDF</button></td>
+</tr>`;
+});
+}
+
+function exportPDF(i){
+const { jsPDF } = window.jspdf;
+let x=data[i];
+const doc=new jsPDF({unit:"mm",format:[80,120]});
+doc.setFontSize(11);
+doc.text("KANTOR PERTANAHAN KAB. SERANG",40,10,{align:"center"});
+doc.text("SEKSI SURVEI DAN PEMETAAN",40,16,{align:"center"});
+doc.line(5,20,75,20);
+doc.setFontSize(14);
+doc.text("No: "+x.no,40,30,{align:"center"});
+doc.setFontSize(10);
+doc.text("Berkas: "+x.berkas,10,40);
+doc.text("Petugas: "+x.petugas,10,46);
+doc.text("Tempo: "+formatIndo(x.tempo),10,52);
+doc.save("Tiket_"+x.no+".pdf");
+}
+</script>
+
+</body>
+</html>
